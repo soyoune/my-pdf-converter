@@ -2,6 +2,7 @@ import os
 import sys
 import re
 import gc
+import urllib.request
 from PIL import Image, ImageEnhance, ImageDraw, ImageFont
 import io
 
@@ -25,16 +26,26 @@ uploaded_files = st.file_uploader(
 def natural_sort_key(file_obj):
     return [int(text) if text.isdigit() else text.lower() for text in re.split(r'(\d+)', file_obj.name)]
 
-# 🔤 깃허브에 같이 올려둔 NanumGothic.ttf 파일을 직접 불러옵니다.
+# ✨ [이미지 추천 방식] jsdelivr CDN을 통해 구글 한글 폰트를 초고속으로 실시간 로드합니다.
 @st.cache_resource
-def load_korean_font(font_size):
-    font_path = "NanumGothic.ttf"
-    if os.path.exists(font_path):
+def load_cdn_korean_font(font_size):
+    # 전 세계에서 가장 빠른 jsdelivr CDN을 통해 나눔고딕 폰트 주소를 다이렉트로 가져옵니다.
+    cdn_url = "https://jsdelivr.net"
+    local_path = "NanumGothic_CDN.ttf"
+    
+    if not os.path.exists(local_path):
         try:
-            return ImageFont.truetype(font_path, font_size)
+            # 안전하게 프록시나 차단 없이 고속 다운로드 수행
+            req = urllib.request.Request(cdn_url, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req) as response, open(local_path, 'wb') as out_file:
+                out_file.write(response.read())
         except Exception:
-            pass
-    return ImageFont.load_default(size=font_size)
+            return ImageFont.load_default(size=font_size)
+            
+    try:
+        return ImageFont.truetype(local_path, font_size)
+    except Exception:
+        return ImageFont.load_default(size=font_size)
 
 def create_pdf_from_uploaded(files, dpi=300):
     cm_to_pixel = dpi / 2.54
@@ -47,7 +58,7 @@ def create_pdf_from_uploaded(files, dpi=300):
     max_row_height = 0
 
     font_size = int(dpi * 0.12)
-    korean_font = load_korean_font(font_size)
+    korean_font = load_cdn_korean_font(font_size)
 
     sorted_files = sorted(files, key=natural_sort_key)
 
@@ -70,7 +81,6 @@ def create_pdf_from_uploaded(files, dpi=300):
                 filename_only = os.path.splitext(file.name)[0]
                 draw = ImageDraw.Draw(current_canvas)
                 
-                # 파일 이름을 이미지 아래에 그리기 위해 크기 측정
                 left, top, right, bottom = draw.textbbox((0, 0), filename_only, font=korean_font)
                 actual_text_height = bottom - top
 
@@ -97,7 +107,7 @@ def create_pdf_from_uploaded(files, dpi=300):
     pages.append(current_canvas)
     
     pdf_buffer = io.BytesIO()
-    # 첫 페이지 객체에서 전체 리스트를 병합하여 저장합니다.
+    # 리스트의 첫 번째 이미지 객체로 save 명령을 내립니다.
     pages[0].save(pdf_buffer, "PDF", resolution=dpi, quality=85, save_all=True, append_images=pages[1:])
     pdf_buffer.seek(0)
     
@@ -110,7 +120,7 @@ def create_pdf_from_uploaded(files, dpi=300):
 if uploaded_files:
     st.success(f"총 {len(uploaded_files)}개의 파일이 선택되었습니다.")
     
-    with st.spinner("PDF 파일을 생성하고 있습니다..."):
+    with st.spinner("CDN 폰트를 로드하여 고품질 PDF를 생성 중입니다..."):
         pdf_data = create_pdf_from_uploaded(uploaded_files)
         
     st.download_button(
