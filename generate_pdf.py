@@ -1,28 +1,29 @@
-import sys
-import subprocess
 import os
+import sys
+import re
+from PIL import Image, ImageEnhance, ImageDraw, ImageFont
+import io
 
-# [최초 1회 실행] 필요한 웹 라이브러리가 없다면 자동으로 설치합니다.
 try:
     import streamlit as st
 except ImportError:
-    py_path = sys.executable
-    subprocess.check_call([py_path, "-m", "pip", "install", "streamlit"])
+    import subprocess
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "streamlit"])
     import streamlit as st
-
-from PIL import Image, ImageEnhance, ImageDraw, ImageFont
-import io
 
 st.set_page_config(page_title="이미지 -> A3 PDF 변환기", layout="centered")
 st.title("📄 이미지 A3 PDF 변환 프로그램")
 st.write("원하는 이미지 파일만 아래에 올리면 고품질 A3 PDF 파일로 결합해 드립니다.")
 
-# ✨ 핵심 기능: 사용자가 직접 파일들을 올릴 수 있는 업로더 창
 uploaded_files = st.file_uploader(
     "변환할 이미지 파일들을 선택하세요 (다중 선택 가능)", 
     type=["png", "jpg", "jpeg", "bmp"], 
     accept_multiple_files=True
 )
+
+# 🔢 [정렬 기능] 숫자 크기를 먼저 비교하고, 같다면 글자순 정렬
+def natural_sort_key(file_obj):
+    return [int(text) if text.isdigit() else text.lower() for text in re.split(r'(\d+)', file_obj.name)]
 
 def create_pdf_from_uploaded(files, dpi=300):
     cm_to_pixel = dpi / 2.54
@@ -34,16 +35,32 @@ def create_pdf_from_uploaded(files, dpi=300):
     x_offset, y_offset = margin, margin
     max_row_height = 0
 
-    font_path = "C:\\Windows\\Fonts\\malgun.ttf"
+    # 폰트 크기 계산
     font_size = int(dpi * 0.12)
-    try:
-        korean_font = ImageFont.truetype(font_path, font_size)
-    except IOError:
+
+    # 🔤 [한글 깨짐 방지] 실행 환경(윈도우 vs 스트림릿 서버)에 맞춰 한글 폰트를 자동 로드합니다.
+    korean_font = None
+    font_paths = [
+        "C:\\Windows\\Fonts\\malgun.ttf",              # 윈도우 로컬 환경
+        "/usr/share/fonts/truetype/nanum/NanumGothic.ttf"  # 리눅스 배포 환경
+    ]
+    
+    for path in font_paths:
+        if os.path.exists(path):
+            try:
+                korean_font = ImageFont.truetype(path, font_size)
+                break
+            except IOError:
+                continue
+
+    if korean_font is None:
         korean_font = ImageFont.load_default(size=font_size)
 
-    for file in files:
+    # 🔄 파일 이름 규칙에 맞게 자동 정렬 적용
+    sorted_files = sorted(files, key=natural_sort_key)
+
+    for file in sorted_files:
         try:
-            # 업로드된 파일 데이터를 이미지로 읽기
             img = Image.open(file).convert("RGB")
             orig_w, orig_h = img.size
             target_h = int(target_w * (orig_h / orig_w))
@@ -79,7 +96,6 @@ def create_pdf_from_uploaded(files, dpi=300):
 
     pages.append(current_canvas)
     
-    # PDF를 메모리 스트림에 저장하여 바로 다운로드할 수 있게 변환
     pdf_buffer = io.BytesIO()
     pages[0].save(pdf_buffer, "PDF", resolution=dpi, quality=100, save_all=True, append_images=pages[1:])
     pdf_buffer.seek(0)
@@ -91,7 +107,6 @@ if uploaded_files:
     with st.spinner("PDF 파일을 생성하고 있습니다..."):
         pdf_data = create_pdf_from_uploaded(uploaded_files)
         
-    # 다운로드 버튼 활성화
     st.download_button(
         label="📥 완성된 PDF 다운로드받기",
         data=pdf_data,
@@ -100,7 +115,5 @@ if uploaded_files:
     )
 
 if __name__ == "__main__":
-    # 처음 딱 한 번만 웹서버를 자동으로 실행해주는 코드입니다.
     if "streamlit" not in sys.argv[0]:
-        print("\n🌐 웹브라우저 창을 여는 중입니다. 잠시만 기다려주세요...")
         os.system(f'"{sys.executable}" -m streamlit run "{__file__}"')
