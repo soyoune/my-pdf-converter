@@ -1,6 +1,7 @@
 import os
 import sys
 import re
+import urllib.request
 from PIL import Image, ImageEnhance, ImageDraw, ImageFont
 import io
 
@@ -25,6 +26,24 @@ uploaded_files = st.file_uploader(
 def natural_sort_key(file_obj):
     return [int(text) if text.isdigit() else text.lower() for text in re.split(r'(\d+)', file_obj.name)]
 
+# 🌐 [한글 깨짐 해결] 인터넷에서 무료 한글 폰트를 실시간으로 가져오는 함수
+@st.cache_resource
+def load_online_korean_font(font_size):
+    font_url = "https://github.com"
+    local_font_path = "NanumGothic.ttf"
+    
+    # 서버에 폰트가 없다면 구글 폰트 저장소에서 직접 다운로드합니다.
+    if not os.path.exists(local_font_path):
+        try:
+            urllib.request.urlretrieve(font_url, local_font_path)
+        except Exception:
+            return ImageFont.load_default(size=font_size)
+            
+    try:
+        return ImageFont.truetype(local_font_path, font_size)
+    except Exception:
+        return ImageFont.load_default(size=font_size)
+
 def create_pdf_from_uploaded(files, dpi=300):
     cm_to_pixel = dpi / 2.54
     canvas_w, canvas_h = int(29.7 * cm_to_pixel), int(42.0 * cm_to_pixel)
@@ -35,26 +54,9 @@ def create_pdf_from_uploaded(files, dpi=300):
     x_offset, y_offset = margin, margin
     max_row_height = 0
 
-    # 폰트 크기 계산
+    # 폰트 크기 및 세팅
     font_size = int(dpi * 0.12)
-
-    # 🔤 [한글 깨짐 방지] 실행 환경(윈도우 vs 스트림릿 서버)에 맞춰 한글 폰트를 자동 로드합니다.
-    korean_font = None
-    font_paths = [
-        "C:\\Windows\\Fonts\\malgun.ttf",              # 윈도우 로컬 환경
-        "/usr/share/fonts/truetype/nanum/NanumGothic.ttf"  # 리눅스 배포 환경
-    ]
-    
-    for path in font_paths:
-        if os.path.exists(path):
-            try:
-                korean_font = ImageFont.truetype(path, font_size)
-                break
-            except IOError:
-                continue
-
-    if korean_font is None:
-        korean_font = ImageFont.load_default(size=font_size)
+    korean_font = load_online_korean_font(font_size)
 
     # 🔄 파일 이름 규칙에 맞게 자동 정렬 적용
     sorted_files = sorted(files, key=natural_sort_key)
@@ -65,7 +67,6 @@ def create_pdf_from_uploaded(files, dpi=300):
             orig_w, orig_h = img.size
             target_h = int(target_w * (orig_h / orig_w))
             img_resized = img.resize((target_w, target_h), Image.Resampling.LANCZOS)
-            
             img_resized = ImageEnhance.Sharpness(img_resized).enhance(1.3)
 
             if x_offset + target_w + margin > canvas_w:
@@ -73,6 +74,7 @@ def create_pdf_from_uploaded(files, dpi=300):
                 y_offset += max_row_height + margin
                 max_row_height = 0
 
+            # 확장자를 제외한 파일 이름 추출
             filename_only = os.path.splitext(file.name)[0]
             draw = ImageDraw.Draw(current_canvas)
             left, top, right, bottom = draw.textbbox((0, 0), filename_only, font=korean_font)
@@ -115,5 +117,5 @@ if uploaded_files:
     )
 
 if __name__ == "__main__":
-    if "streamlit" not in sys.argv[0]:
+    if "streamlit" not in sys.argv:
         os.system(f'"{sys.executable}" -m streamlit run "{__file__}"')
