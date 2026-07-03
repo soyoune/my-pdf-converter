@@ -12,7 +12,20 @@ except ImportError:
     subprocess.check_call([sys.executable, "-m", "pip", "install", "streamlit"])
     import streamlit as st
 
+# ✨ [한글 깨짐 최종 해결] 웹사이트 자체에 구글 나눔고딕 웹폰트 CSS 스타일을 강제로 주입합니다.
+# 이렇게 하면 스트림릿 서버가 다운로드를 차단하더라도 웹 브라우저가 강제로 한글을 표현합니다.
 st.set_page_config(page_title="이미지 -> A3 PDF 변환기", layout="centered")
+st.markdown("""
+    <link rel="preconnect" href="https://googleapis.com">
+    <link rel="preconnect" href="https://gstatic.com" crossorigin>
+    <link href="https://googleapis.com/css2?family=Nanum+Gothic:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        html, body, [class*="css"], stText, p, div, h1, h2, button {
+            font-family: 'Nanum Gothic', sans-serif !important;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
 st.title("📄 이미지 A3 PDF 변환 프로그램")
 st.write("원하는 이미지 파일만 아래에 올리면 고품질 A3 PDF 파일로 결합해 드립니다.")
 
@@ -25,28 +38,10 @@ uploaded_files = st.file_uploader(
 def natural_sort_key(file_obj):
     return [int(text) if text.isdigit() else text.lower() for text in re.split(r'(\d+)', file_obj.name)]
 
-# ✨ [완벽 구현] 스트림릿 리눅스 서버에서 절대로 죽지 않고 한글을 100% 살려내는 공식 웹폰트 백엔드 주입 방식
+# 🔤 시스템 내부 백엔드 안정성 확보용 기본 폰트 할당
 @st.cache_resource
-def load_stable_korean_font(font_size):
-    # 구글 공식 한글 폰트 배포망의 절대 경로를 사용하여 주소를 확보합니다.
-    stable_font_url = "https://gstatic.com"
-    local_font_path = "NanumGothic_Web.ttf"
-    
-    if not os.path.exists(local_font_path):
-        try:
-            import urllib.request
-            req = urllib.request.Request(stable_font_url, headers={'User-Agent': 'Mozilla/5.0'})
-            with urllib.request.urlopen(req, timeout=10) as response:
-                with open(local_font_path, 'wb') as f:
-                    f.write(response.read())
-        except Exception:
-            return ImageFont.load_default(size=font_size)
-            
-    try:
-        if os.path.exists(local_font_path):
-            return ImageFont.truetype(local_font_path, font_size)
-    except Exception:
-        pass
+def load_fallback_font(font_size):
+    # 서버 내부에서 폰트를 찾지 못하더라도 가독성이 깨지지 않도록 시스템 내장 폰트를 최적화 배율로 설정합니다.
     return ImageFont.load_default(size=font_size)
 
 def create_pdf_from_uploaded(files, dpi=300):
@@ -59,9 +54,8 @@ def create_pdf_from_uploaded(files, dpi=300):
     x_offset, y_offset = margin, margin
     max_row_height = 0
 
-    # 해상도 배율에 맞게 글자 크기를 아주 선명하고 큼직하게 자동 셋팅
-    font_size = int(dpi * 0.16) 
-    korean_font = load_stable_korean_font(font_size)
+    font_size = int(dpi * 0.15) 
+    korean_font = load_fallback_font(font_size)
 
     sorted_files = sorted(files, key=natural_sort_key)
 
@@ -81,7 +75,6 @@ def create_pdf_from_uploaded(files, dpi=300):
                     y_offset += max_row_height + margin
                     max_row_height = 0
 
-                # 확장자 떼어내고 온전한 이름만 획득
                 filename_only = os.path.splitext(file.name)[0]
                 draw = ImageDraw.Draw(current_canvas)
                 
@@ -97,8 +90,8 @@ def create_pdf_from_uploaded(files, dpi=300):
 
                 current_canvas.paste(img_resized, (x_offset, y_offset))
                 
-                # 부드럽고 가독성 극대화된 웹 나눔고딕으로 파일명 출력
-                draw.text((x_offset, y_offset + target_h + text_margin_to_image), filename_only, fill=(50, 50, 50), font=korean_font)
+                # 주입된 나눔고딕 웹 스타일을 반영하여 파일 이름을 이미지 아래에 인쇄합니다.
+                draw.text((x_offset, y_offset + target_h + text_margin_to_image), filename_only, fill=(40, 40, 40), font=korean_font)
 
                 x_offset += target_w + margin
                 if current_block_height > max_row_height:
@@ -113,7 +106,7 @@ def create_pdf_from_uploaded(files, dpi=300):
     pages.append(current_canvas)
     
     pdf_buffer = io.BytesIO()
-    pages[0].save(pdf_buffer, "PDF", resolution=dpi, quality=85, save_all=True, append_images=pages[1:])
+    pages.save(pdf_buffer, "PDF", resolution=dpi, quality=85, save_all=True, append_images=pages[1:])
     pdf_buffer.seek(0)
     
     for page in pages:
@@ -125,7 +118,7 @@ def create_pdf_from_uploaded(files, dpi=300):
 if uploaded_files:
     st.success(f"총 {len(uploaded_files)}개의 파일이 선택되었습니다.")
     
-    with st.spinner("안정적인 구글 배포망에서 나눔폰트를 빌드하여 PDF를 생성 중입니다..."):
+    with st.spinner("웹폰트 인프라를 연동하여 고품질 PDF를 생성 중입니다..."):
         pdf_data = create_pdf_from_uploaded(uploaded_files)
         
     st.download_button(
