@@ -25,49 +25,48 @@ uploaded_files = st.file_uploader(
 def natural_sort_key(file_obj):
     return [int(text) if text.isdigit() else text.lower() for text in re.split(r'(\d+)', file_obj.name)]
 
-# ✨ [완벽 해결] 폰트 파일 없이 픽셀 데이터 조합으로 조합형 한글을 직접 그리는 최첨단 폰트 엔진
+# 🔤 글자 크기를 시원시원하게 대폭 키운 확장형 픽셀 폰트 엔진
 class PixelKoreanFont:
     def __init__(self, size):
         self.size = size
-        # 초경량 자음/모음 비트맵 매트릭스 테이블 내장
         self.glyphs = {
-            'ㄱ': [[1,1,1,1],[0,0,0,1],[0,0,0,1],[0,0,0,1]], 'ㄴ': [[1,0,0,0],[1,0,0,0],[1,0,0,0],[1,1,1,1]],
-            'ㄷ': [[1,1,1,1],[1,0,0,0],[1,0,0,0],[1,1,1,1]], 'ㄹ': [[1,1,1,1],[1,0,0,1],[1,1,1,1],[1,0,0,1],[1,1,1,1]],
+            'ㄱ': [[1,1,1,1],[1,0,0,0],[1,0,0,0],[1,0,0,0]], 'ㄴ': [[1,0,0,0],[1,0,0,0],[1,0,0,0],[1,1,1,1]],
+            'ㄷ': [[1,1,1,1],[1,0,0,0],[1,0,0,0],[1,1,1,1]], 'ㄹ': [[1,1,1,1],[1,0,0,1],[1,1,1,1],[1,0,0,1]],
             'ㅁ': [[1,1,1,1],[1,0,0,1],[1,0,0,1],[1,1,1,1]], 'ㅂ': [[1,0,0,1],[1,1,1,1],[1,0,0,1],[1,1,1,1]],
             'ㅅ': [[0,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,0,1]], 'ㅇ': [[0,1,1,0],[1,0,0,1],[1,0,0,1],[0,1,1,0]],
-            'ㅈ': [[1,1,1,1],[0,0,1,0],[0,1,0,0],[1,0,0,1]], 'ㅊ': [[0,1,0,0],[1,1,1,1],[0,1,0,0],[1,0,0,1]],
-            'ㅋ': [[1,1,1,1],[1,1,1,0],[1,0,0,0],[1,1,1,1]], 'ㅌ': [[1,1,1,1],[1,1,1,0],[1,0,0,0],[1,1,1,1]],
-            'ㅍ': [[1,1,1,1],[1,0,0,1],[1,1,1,1],[1,0,0,1]], 'ㅎ': [[0,1,0,0],[1,1,1,1],[0,1,1,0],[1,0,0,1],[0,1,1,0]],
-            'ㅏ': [[1,0],[1,1],[1,0],[1,0]], 'ㅓ': [[0,1],[1,1],[0,1],[0,1]], 'ㅗ': [[0,1,0],[1,1,1]],
-            'ㅜ': [[1,1,1],[0,1,0]], 'ㅡ': [[1,1,1,1]], 'ㅣ': [[1],[1],[1],[1]], 'ㅐ': [[1,0,1],[1,1,1],[1,0,1]]
+            'ㅈ': [[1,1,1,1],[0,0,1,0],[0,1,0,0],[1,0,0,0]], 'ㅊ': [[1,1,1,1],[1,1,1,1],[0,1,0,0],[0,1,0,0]],
+            'ㅋ': [[1,1,1,1],[1,0,0,0],[1,1,1,1],[1,0,0,0]], 'ㅌ': [[1,1,1,1],[1,1,1,1],[1,0,0,0],[1,1,1,1]],
+            'ㅍ': [[1,1,1,1],[1,0,0,1],[1,1,1,1],[1,0,0,1]], 'ㅎ': [[0,1,1,0],[1,1,1,1],[1,0,0,1],[1,1,1,1]],
+            'ㅏ': [[0,1,0,0],[0,1,1,0],[0,1,0,0],[0,1,0,0]], 'ㅓ': [[0,1,0,0],[1,1,0,0],[0,1,0,0],[0,1,0,0]], 
+            'ㅗ': [[0,1,0,0],[1,1,1,0],[0,0,0,0],[0,0,0,0]], 'ㅜ': [[0,0,0,0],[1,1,1,0],[0,1,0,0],[0,1,0,0]], 
+            'ㅡ': [[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]], 'ㅣ': [[0,1,0,0],[0,1,0,0],[0,1,0,0],[0,1,0,0]], 
+            'ㅐ': [[0,1,0,1],[0,1,1,1],[0,1,0,1],[0,1,0,1]]
         }
         
-    def draw_text(self, draw, position, text, color=(60, 60, 60)):
+    def draw_text(self, draw, position, text, color=(30, 30, 30)):
         x, y = position
-        scale = max(1, self.size // 14) # 해상도 맞춤 스케일링 설정
+        # ✨ 글자가 크게 보이도록 기본 스케일을 4배 이상 확대 적용 (굵고 큼직한 가시성 확보)
+        scale = max(4, self.size // 4) 
         
         for char in text:
-            # 아스키 문자는 기본 폰트로 출력 처리
             if ord(char) < 128:
-                draw.text((x, y), char, fill=color)
-                x += self.size // 2
+                # 영문/숫자도 크게 맞춤 출력
+                draw.text((x, y), char, fill=color, font_size=scale*3)
+                x += scale * 3
                 continue
                 
-            # 한글 음절을 자음/모음 단위로 안전 분해 유도
             char_code = ord(char) - 44032
             if 0 <= char_code <= 11171:
                 cho = char_code // 588
                 jung = (char_code % 588) // 28
-                jong = char_code % 28
                 
-                # 가상 픽셀 매핑을 통해 도트 렌더링을 화면에 직접 투사
                 cho_list = ['ㄱ','ㄲ','ㄴ','ㄷ','ㄸ','ㄹ','ㅁ','ㅂ','ㅃ','ㅅ','ㅆ','ㅇ','ㅈ','ㅉ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ']
                 jung_list = ['ㅏ','ㅐ','ㅑ','ㅒ','ㅓ','ㅔ','ㅕ','ㅖ','ㅗ','ㅘ','ㅙ','ㅚ','ㅛ','ㅜ','ㅝ','ㅞ','ㅟ','ㅠ','ㅡ','ㅢ','ㅣ']
                 
-                c_target = cho_list[cho][0] if cho < len(cho_list) else 'ㄱ'
-                j_target = jung_list[jung][0] if jung < len(jung_list) else 'ㅡ'
+                c_target = cho_list[cho] if cho < len(cho_list) else 'ㄱ'
+                j_target = jung_list[jung] if jung < len(jung_list) else 'ㅡ'
                 
-                # 초성 그리기
+                # 초성 크게 그리기
                 if c_target in self.glyphs:
                     matrix = self.glyphs[c_target]
                     for r_idx, row in enumerate(matrix):
@@ -75,7 +74,7 @@ class PixelKoreanFont:
                             if val:
                                 draw.rectangle([x + c_idx*scale, y + r_idx*scale, x + (c_idx+1)*scale, y + (r_idx+1)*scale], fill=color)
                 
-                # 중성 그리기
+                # 중성 크게 그리기
                 if j_target in self.glyphs:
                     matrix = self.glyphs[j_target]
                     for r_idx, row in enumerate(matrix):
@@ -83,15 +82,15 @@ class PixelKoreanFont:
                             if val:
                                 draw.rectangle([x + (c_idx+5)*scale, y + r_idx*scale, x + (c_idx+6)*scale, y + (r_idx+1)*scale], fill=color)
                                 
-                x += scale * 10 # 한 글자 렌더링 후 다음 자축 이동
+                x += scale * 11 # 글자 크기에 맞춰 옆 글자와의 여백 간격 확보
             else:
-                draw.text((x, y), char, fill=color)
-                x += self.size
+                draw.text((x, y), char, fill=color, font_size=scale*3)
+                x += scale * 5
 
 def create_pdf_from_uploaded(files, dpi=300):
     cm_to_pixel = dpi / 2.54
     canvas_w, canvas_h = int(29.7 * cm_to_pixel), int(42.0 * cm_to_pixel)
-    target_w, margin, text_margin_to_image = int(6.0 * cm_to_pixel), int(0.8 * cm_to_pixel), 15
+    target_w, margin, text_margin_to_image = int(6.0 * cm_to_pixel), int(0.8 * cm_to_pixel), 30
     
     pages = []
     current_canvas = Image.new("RGB", (canvas_w, canvas_h), "white")
@@ -99,7 +98,6 @@ def create_pdf_from_uploaded(files, dpi=300):
     max_row_height = 0
 
     font_size = int(dpi * 0.12)
-    # ✨ 폰트 시스템을 가상 조합 픽셀 엔진으로 대체
     korean_font_engine = PixelKoreanFont(font_size)
 
     sorted_files = sorted(files, key=natural_sort_key)
@@ -121,10 +119,9 @@ def create_pdf_from_uploaded(files, dpi=300):
                     max_row_height = 0
 
                 filename_only = os.path.splitext(file.name)[0]
-                draw = ImageDraw.Draw(current_canvas)
                 
-                # 고정 텍스트 영역 계산 (메모리 절약형 오프셋 배치)
-                actual_text_height = font_size
+                # ✨ 글자가 대폭 커진 만큼 하단 여백 공간도 여유롭게 조정
+                actual_text_height = font_size * 3 
 
                 current_block_height = target_h + text_margin_to_image + actual_text_height
                 if y_offset + current_block_height + margin > canvas_h:
@@ -135,9 +132,9 @@ def create_pdf_from_uploaded(files, dpi=300):
 
                 current_canvas.paste(img_resized, (x_offset, y_offset))
                 
-                # ✨ 엔진을 이용해 한글 텍스트 강제 가공 투사
+                draw = ImageDraw.Draw(current_canvas)
                 text_position = (x_offset, y_offset + target_h + text_margin_to_image)
-                korean_font_engine.draw_text(draw, text_position, filename_only, color=(60, 60, 60))
+                korean_font_engine.draw_text(draw, text_position, filename_only, color=(40, 40, 40))
 
                 x_offset += target_w + margin
                 if current_block_height > max_row_height:
@@ -164,7 +161,7 @@ def create_pdf_from_uploaded(files, dpi=300):
 if uploaded_files:
     st.success(f"총 {len(uploaded_files)}개의 파일이 선택되었습니다.")
     
-    with st.spinner("가상 한글 엔진을 구동하여 PDF를 생성 중입니다..."):
+    with st.spinner("가상 한글 엔진을 확대 구동하여 PDF를 생성 중입니다..."):
         pdf_data = create_pdf_from_uploaded(uploaded_files)
         
     st.download_button(
