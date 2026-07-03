@@ -26,10 +26,9 @@ uploaded_files = st.file_uploader(
 def natural_sort_key(file_obj):
     return [int(text) if text.isdigit() else text.lower() for text in re.split(r'(\d+)', file_obj.name)]
 
-# 🔤 [핵심 기능] 폰트 파일을 텍스트 코드로 내장하여 실시간으로 복원합니다.
+# 🔤 한글 폰트를 텍스트 코드로 내장하여 실시간으로 복원합니다.
 @st.cache_resource
 def load_embedded_korean_font(font_size):
-    # 초경량 한글 폰트(DungGeunMo)의 Base64 압축 데이터입니다. (용량 최적화 완료)
     font_base64 = (
         "AAEAAAASAQAABAAwR0RFRgAzADIAAAHwAAAAKEdQT1MFiwW6AAABMAAAADhHU1VCAAEAAA"
         "AAAAHwAAAADk9TLzIAHgBKAAABYAAAAGBjbWFwAA0AGgAAAXgAAABgZ2x5ZgAAAAAAAAGY"
@@ -49,11 +48,9 @@ def load_embedded_korean_font(font_size):
         "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
     )
     try:
-        # 내장된 폰트 데이터를 디코딩하여 메모리에서 직접 폰트로 로드합니다.
         font_bytes = base64.b64decode(font_base64)
         return ImageFont.truetype(io.BytesIO(font_bytes), font_size)
     except Exception:
-        # 만약 실패할 경우 시스템 기본 폰트로 안전하게 대체합니다.
         return ImageFont.load_default(size=font_size)
 
 def create_pdf_from_uploaded(files, dpi=300):
@@ -115,7 +112,9 @@ def create_pdf_from_uploaded(files, dpi=300):
     pages.append(current_canvas)
     
     pdf_buffer = io.BytesIO()
-    pages.save(pdf_buffer, "PDF", resolution=dpi, quality=85, save_all=True, append_images=pages[1:])
+    
+    # ✨ [오타 수정] pages 대신 pages[0]을 타겟으로 지정하여 첫 페이지부터 정상 저장하게 고쳤습니다.
+    pages[0].save(pdf_buffer, "PDF", resolution=dpi, quality=85, save_all=True, append_images=pages[1:])
     pdf_buffer.seek(0)
     
     for page in pages:
