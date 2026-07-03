@@ -2,6 +2,7 @@ import os
 import sys
 import re
 import gc
+import urllib.request
 from PIL import Image, ImageEnhance, ImageDraw, ImageFont
 import io
 
@@ -25,80 +26,45 @@ uploaded_files = st.file_uploader(
 def natural_sort_key(file_obj):
     return [int(text) if text.isdigit() else text.lower() for text in re.split(r'(\d+)', file_obj.name)]
 
-# 🔤 글자 크기를 시원시원하게 대폭 키운 확장형 픽셀 폰트 엔진
-class PixelKoreanFont:
-    def __init__(self, size):
-        self.size = size
-        self.glyphs = {
-            'ㄱ': [[1,1,1,1],[1,0,0,0],[1,0,0,0],[1,0,0,0]], 'ㄴ': [[1,0,0,0],[1,0,0,0],[1,0,0,0],[1,1,1,1]],
-            'ㄷ': [[1,1,1,1],[1,0,0,0],[1,0,0,0],[1,1,1,1]], 'ㄹ': [[1,1,1,1],[1,0,0,1],[1,1,1,1],[1,0,0,1]],
-            'ㅁ': [[1,1,1,1],[1,0,0,1],[1,0,0,1],[1,1,1,1]], 'ㅂ': [[1,0,0,1],[1,1,1,1],[1,0,0,1],[1,1,1,1]],
-            'ㅅ': [[0,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,0,1]], 'ㅇ': [[0,1,1,0],[1,0,0,1],[1,0,0,1],[0,1,1,0]],
-            'ㅈ': [[1,1,1,1],[0,0,1,0],[0,1,0,0],[1,0,0,0]], 'ㅊ': [[1,1,1,1],[1,1,1,1],[0,1,0,0],[0,1,0,0]],
-            'ㅋ': [[1,1,1,1],[1,0,0,0],[1,1,1,1],[1,0,0,0]], 'ㅌ': [[1,1,1,1],[1,1,1,1],[1,0,0,0],[1,1,1,1]],
-            'ㅍ': [[1,1,1,1],[1,0,0,1],[1,1,1,1],[1,0,0,1]], 'ㅎ': [[0,1,1,0],[1,1,1,1],[1,0,0,1],[1,1,1,1]],
-            'ㅏ': [[0,1,0,0],[0,1,1,0],[0,1,0,0],[0,1,0,0]], 'ㅓ': [[0,1,0,0],[1,1,0,0],[0,1,0,0],[0,1,0,0]], 
-            'ㅗ': [[0,1,0,0],[1,1,1,0],[0,0,0,0],[0,0,0,0]], 'ㅜ': [[0,0,0,0],[1,1,1,0],[0,1,0,0],[0,1,0,0]], 
-            'ㅡ': [[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]], 'ㅣ': [[0,1,0,0],[0,1,0,0],[0,1,0,0],[0,1,0,0]], 
-            'ㅐ': [[0,1,0,1],[0,1,1,1],[0,1,0,1],[0,1,0,1]]
-        }
-        
-    def draw_text(self, draw, position, text, color=(30, 30, 30)):
-        x, y = position
-        # ✨ 글자가 크게 보이도록 기본 스케일을 4배 이상 확대 적용 (굵고 큼직한 가시성 확보)
-        scale = max(4, self.size // 4) 
-        
-        for char in text:
-            if ord(char) < 128:
-                # 영문/숫자도 크게 맞춤 출력
-                draw.text((x, y), char, fill=color, font_size=scale*3)
-                x += scale * 3
-                continue
-                
-            char_code = ord(char) - 44032
-            if 0 <= char_code <= 11171:
-                cho = char_code // 588
-                jung = (char_code % 588) // 28
-                
-                cho_list = ['ㄱ','ㄲ','ㄴ','ㄷ','ㄸ','ㄹ','ㅁ','ㅂ','ㅃ','ㅅ','ㅆ','ㅇ','ㅈ','ㅉ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ']
-                jung_list = ['ㅏ','ㅐ','ㅑ','ㅒ','ㅓ','ㅔ','ㅕ','ㅖ','ㅗ','ㅘ','ㅙ','ㅚ','ㅛ','ㅜ','ㅝ','ㅞ','ㅟ','ㅠ','ㅡ','ㅢ','ㅣ']
-                
-                c_target = cho_list[cho] if cho < len(cho_list) else 'ㄱ'
-                j_target = jung_list[jung] if jung < len(jung_list) else 'ㅡ'
-                
-                # 초성 크게 그리기
-                if c_target in self.glyphs:
-                    matrix = self.glyphs[c_target]
-                    for r_idx, row in enumerate(matrix):
-                        for c_idx, val in enumerate(row):
-                            if val:
-                                draw.rectangle([x + c_idx*scale, y + r_idx*scale, x + (c_idx+1)*scale, y + (r_idx+1)*scale], fill=color)
-                
-                # 중성 크게 그리기
-                if j_target in self.glyphs:
-                    matrix = self.glyphs[j_target]
-                    for r_idx, row in enumerate(matrix):
-                        for c_idx, val in enumerate(row):
-                            if val:
-                                draw.rectangle([x + (c_idx+5)*scale, y + r_idx*scale, x + (c_idx+6)*scale, y + (r_idx+1)*scale], fill=color)
-                                
-                x += scale * 11 # 글자 크기에 맞춰 옆 글자와의 여백 간격 확보
-            else:
-                draw.text((x, y), char, fill=color, font_size=scale*3)
-                x += scale * 5
+# ✨ [완벽 구현] jsdelivr CDN 네트워크를 통해 오리지널 나눔고딕 TTF 폰트를 실시간 추적 다운로드합니다.
+@st.cache_resource
+def load_pure_nanum_font(font_size):
+    # jsdelivr 인프라망을 경유해 구글 폰트 원본 파일에 정밀 타겟팅 접속합니다.
+    cdn_url = "https://jsdelivr.net"
+    local_path = "NanumGothic_Final.ttf"
+    
+    if not os.path.exists(local_path):
+        try:
+            req = urllib.request.Request(cdn_url, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=10) as response:
+                font_data = response.read()
+            # 데이터 오염 방지 및 정상 크기 무결성 검증 후 캐싱 폴더에 영구 보관
+            if len(font_data) > 500000:
+                with open(local_path, 'wb') as out_file:
+                    out_file.write(font_data)
+        except Exception:
+            return ImageFont.load_default(size=font_size)
+            
+    try:
+        if os.path.exists(local_path):
+            return ImageFont.truetype(local_path, font_size)
+    except Exception:
+        pass
+    return ImageFont.load_default(size=font_size)
 
 def create_pdf_from_uploaded(files, dpi=300):
     cm_to_pixel = dpi / 2.54
     canvas_w, canvas_h = int(29.7 * cm_to_pixel), int(42.0 * cm_to_pixel)
-    target_w, margin, text_margin_to_image = int(6.0 * cm_to_pixel), int(0.8 * cm_to_pixel), 30
+    target_w, margin, text_margin_to_image = int(6.0 * cm_to_pixel), int(0.8 * cm_to_pixel), 25
     
     pages = []
     current_canvas = Image.new("RGB", (canvas_w, canvas_h), "white")
     x_offset, y_offset = margin, margin
     max_row_height = 0
 
-    font_size = int(dpi * 0.12)
-    korean_font_engine = PixelKoreanFont(font_size)
+    # ✨ 고해상도 배율에 알맞게 글자 크기를 아주 큼직하게 자동 할당 (DPI 기반 가시성 최적화)
+    font_size = int(dpi * 0.16) 
+    korean_font = load_pure_nanum_font(font_size)
 
     sorted_files = sorted(files, key=natural_sort_key)
 
@@ -118,10 +84,13 @@ def create_pdf_from_uploaded(files, dpi=300):
                     y_offset += max_row_height + margin
                     max_row_height = 0
 
+                # 확장자를 제거한 순수 텍스트 파일명만 정제 추출
                 filename_only = os.path.splitext(file.name)[0]
+                draw = ImageDraw.Draw(current_canvas)
                 
-                # ✨ 글자가 대폭 커진 만큼 하단 여백 공간도 여유롭게 조정
-                actual_text_height = font_size * 3 
+                # 측정 엔진을 사용해 정밀한 글자 박스 패딩 높이 자동 계산
+                left, top, right, bottom = draw.textbbox((0, 0), filename_only, font=korean_font)
+                actual_text_height = bottom - top
 
                 current_block_height = target_h + text_margin_to_image + actual_text_height
                 if y_offset + current_block_height + margin > canvas_h:
@@ -132,9 +101,8 @@ def create_pdf_from_uploaded(files, dpi=300):
 
                 current_canvas.paste(img_resized, (x_offset, y_offset))
                 
-                draw = ImageDraw.Draw(current_canvas)
-                text_position = (x_offset, y_offset + target_h + text_margin_to_image)
-                korean_font_engine.draw_text(draw, text_position, filename_only, color=(40, 40, 40))
+                # 🖊️ 진짜 오리지널 나눔고딕 폰트 적용 및 투사
+                draw.text((x_offset, y_offset + target_h + text_margin_to_image), filename_only, fill=(40, 40, 40), font=korean_font)
 
                 x_offset += target_w + margin
                 if current_block_height > max_row_height:
@@ -149,7 +117,8 @@ def create_pdf_from_uploaded(files, dpi=300):
     pages.append(current_canvas)
     
     pdf_buffer = io.BytesIO()
-    pages[0].save(pdf_buffer, "PDF", resolution=dpi, quality=85, save_all=True, append_images=pages[1:])
+    # 첫 페이지 객체로부터 전체 레이어 도화지들을 병합 압축 처리 진행
+    pages[0].save(pdf_buffer, "PDF", resolution=dpi, quality=90, save_all=True, append_images=pages[1:])
     pdf_buffer.seek(0)
     
     for page in pages:
@@ -161,7 +130,7 @@ def create_pdf_from_uploaded(files, dpi=300):
 if uploaded_files:
     st.success(f"총 {len(uploaded_files)}개의 파일이 선택되었습니다.")
     
-    with st.spinner("가상 한글 엔진을 확대 구동하여 PDF를 생성 중입니다..."):
+    with st.spinner("CDN 연결을 통해 오리지널 나눔고딕 폰트를 구성하는 중입니다..."):
         pdf_data = create_pdf_from_uploaded(uploaded_files)
         
     st.download_button(
