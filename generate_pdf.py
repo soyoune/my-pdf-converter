@@ -1,7 +1,8 @@
 import os
 import sys
 import re
-import urllib.request
+import gc
+import base64
 from PIL import Image, ImageEnhance, ImageDraw, ImageFont
 import io
 
@@ -22,27 +23,24 @@ uploaded_files = st.file_uploader(
     accept_multiple_files=True
 )
 
-# 🔢 [정렬 기능] 숫자 크기를 먼저 비교하고, 같다면 글자순 정렬
 def natural_sort_key(file_obj):
     return [int(text) if text.isdigit() else text.lower() for text in re.split(r'(\d+)', file_obj.name)]
 
-# 🌐 [한글 깨짐 해결] 인터넷에서 무료 한글 폰트를 실시간으로 가져오는 함수
+# 🔤 [메모리 절약] 리눅스 서버 기본 한글 폰트 경로 우선 탐색
 @st.cache_resource
-def load_online_korean_font(font_size):
-    font_url = "https://github.com"
-    local_font_path = "NanumGothic.ttf"
-    
-    # 서버에 폰트가 없다면 구글 폰트 저장소에서 직접 다운로드합니다.
-    if not os.path.exists(local_font_path):
-        try:
-            urllib.request.urlretrieve(font_url, local_font_path)
-        except Exception:
-            return ImageFont.load_default(size=font_size)
-            
-    try:
-        return ImageFont.truetype(local_font_path, font_size)
-    except Exception:
-        return ImageFont.load_default(size=font_size)
+def load_system_font(font_size):
+    standard_paths = [
+        "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
+        "/usr/share/fonts/fonts-go/Go-Regular.ttf",
+        "C:\\Windows\\Fonts\\malgun.ttf"
+    ]
+    for path in standard_paths:
+        if os.path.exists(path):
+            try:
+                return ImageFont.truetype(path, font_size)
+            except Exception:
+                continue
+    return ImageFont.load_default(size=font_size)
 
 def create_pdf_from_uploaded(files, dpi=300):
     cm_to_pixel = dpi / 2.54
@@ -54,59 +52,72 @@ def create_pdf_from_uploaded(files, dpi=300):
     x_offset, y_offset = margin, margin
     max_row_height = 0
 
-    # 폰트 크기 및 세팅
     font_size = int(dpi * 0.12)
-    korean_font = load_online_korean_font(font_size)
+    korean_font = load_system_font(font_size)
 
-    # 🔄 파일 이름 규칙에 맞게 자동 정렬 적용
     sorted_files = sorted(files, key=natural_sort_key)
 
     for file in sorted_files:
         try:
-            img = Image.open(file).convert("RGB")
-            orig_w, orig_h = img.size
-            target_h = int(target_w * (orig_h / orig_w))
-            img_resized = img.resize((target_w, target_h), Image.Resampling.LANCZOS)
-            img_resized = ImageEnhance.Sharpness(img_resized).enhance(1.3)
+            # 💡 메모리 누수 방지: BytesIO를 컨텍스트 매니저로 열기
+            file_bytes = file.read()
+            with Image.open(io.BytesIO(file_bytes)) as img:
+                img = img.convert("RGB")
+                orig_w, orig_h = img.size
+                target_h = int(target_w * (orig_h / orig_w))
+                
+                # 메모리 절약을 위해 축소형 리사이즈 적용
+                img_resized = img.resize((target_w, target_h), Image.Resampling.BILINEAR)
+                img_resized = ImageEnhance.Sharpness(img_resized).enhance(1.2)
 
-            if x_offset + target_w + margin > canvas_w:
-                x_offset = margin
-                y_offset += max_row_height + margin
-                max_row_height = 0
+                if x_offset + target_w + margin > canvas_w:
+                    x_offset = margin
+                    y_offset += max_row_height + margin
+                    max_row_height = 0
 
-            # 확장자를 제외한 파일 이름 추출
-            filename_only = os.path.splitext(file.name)[0]
-            draw = ImageDraw.Draw(current_canvas)
-            left, top, right, bottom = draw.textbbox((0, 0), filename_only, font=korean_font)
-            actual_text_height = bottom - top
+                filename_only = os.path.splitext(file.name)[0]
+                draw = ImageDraw.Draw(current_canvas)
+                left, top, right, bottom = draw.textbbox((0, 0), filename_only, font=korean_font)
+                actual_text_height = bottom - top
 
-            current_block_height = target_h + text_margin_to_image + actual_text_height
-            if y_offset + current_block_height + margin > canvas_h:
-                pages.append(current_canvas)
-                current_canvas = Image.new("RGB", (canvas_w, canvas_h), "white")
-                x_offset, y_offset = margin, margin
-                max_row_height = 0
+                current_block_height = target_h + text_margin_to_image + actual_text_height
+                if y_offset + current_block_height + margin > canvas_h:
+                    pages.append(current_canvas)
+                    current_canvas = Image.new("RGB", (canvas_w, canvas_h), "white")
+                    x_offset, y_offset = margin, margin
+                    max_row_height = 0
 
-            current_canvas.paste(img_resized, (x_offset, y_offset))
-            draw.text((x_offset, y_offset + target_h + text_margin_to_image), filename_only, fill=(60, 60, 60), font=korean_font)
+                current_canvas.paste(img_resized, (x_offset, y_offset))
+                draw.text((x_offset, y_offset + target_h + text_margin_to_image), filename_only, fill=(60, 60, 60), font=korean_font)
 
-            x_offset += target_w + margin
-            if current_block_height > max_row_height:
-                max_row_height = current_block_height
+                x_offset += target_w + margin
+                if current_block_height > max_row_height:
+                    max_row_height = current_block_height
+            
+            # 개별 이미지 메모리 즉시 해제
+            del file_bytes
+            gc.collect()
+            
         except Exception as e:
             st.error(f"파일 처리 실패 ({file.name}): {e}")
 
     pages.append(current_canvas)
     
     pdf_buffer = io.BytesIO()
-    pages[0].save(pdf_buffer, "PDF", resolution=dpi, quality=100, save_all=True, append_images=pages[1:])
+    pages[0].save(pdf_buffer, "PDF", resolution=dpi, quality=85, save_all=True, append_images=pages[1:])
     pdf_buffer.seek(0)
+    
+    # 💡 캔버스 메모리 청소
+    for page in pages:
+        page.close()
+    gc.collect()
+    
     return pdf_buffer
 
 if uploaded_files:
     st.success(f"총 {len(uploaded_files)}개의 파일이 선택되었습니다.")
     
-    with st.spinner("PDF 파일을 생성하고 있습니다..."):
+    with st.spinner("메모리를 최적화하여 PDF 파일을 생성 중입니다..."):
         pdf_data = create_pdf_from_uploaded(uploaded_files)
         
     st.download_button(
