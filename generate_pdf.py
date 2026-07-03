@@ -14,15 +14,6 @@ except ImportError:
 
 st.set_page_config(page_title="이미지 -> A3 PDF 변환기", layout="centered")
 
-# 화면 UI 스타일 가독성 개선
-st.markdown("""
-    <style>
-        html, body, [class*="css"], p, div, h1, button {
-            font-family: 'sans-serif' !important;
-        }
-    </style>
-""", unsafe_allow_html=True)
-
 st.title("📄 이미지 A3 PDF 변환 프로그램")
 st.write("원하는 이미지 파일만 아래에 올리면 고품질 A3 PDF 파일로 결합해 드립니다.")
 
@@ -35,9 +26,17 @@ uploaded_files = st.file_uploader(
 def natural_sort_key(file_obj):
     return [int(text) if text.isdigit() else text.lower() for text in re.split(r'(\d+)', file_obj.name)]
 
-# 🔤 시스템 안정성 및 크래시 방지를 위한 내장 백엔드 폰트 시스템 가동
+# ✨ [한글 깨짐 원천 해결] 깃허브에 함께 올려둔 NanumGothic.ttf 파일을 다이렉트로 읽어옵니다.
 @st.cache_resource
-def load_stable_font(font_size):
+def load_local_nanum_font(font_size):
+    font_path = "NanumGothic.ttf"
+    # 현재 실행 폴더(깃허브 저장소) 안에 폰트 파일이 실재하는지 검사합니다.
+    if os.path.exists(font_path):
+        try:
+            return ImageFont.truetype(font_path, font_size)
+        except Exception:
+            pass
+    # 만약 파일이 없다면 에러 방지용 기본 폰트 반환
     return ImageFont.load_default(size=font_size)
 
 def create_pdf_from_uploaded(files, dpi=300):
@@ -50,8 +49,9 @@ def create_pdf_from_uploaded(files, dpi=300):
     x_offset, y_offset = margin, margin
     max_row_height = 0
 
-    font_size = int(dpi * 0.15) 
-    korean_font = load_stable_font(font_size)
+    # 고해상도 A3 도화지에 맞게 폰트 크기를 아주 크고 선명하게 세팅 (가시성 최적화)
+    font_size = int(dpi * 0.16) 
+    korean_font = load_local_nanum_font(font_size)
 
     sorted_files = sorted(files, key=natural_sort_key)
 
@@ -71,15 +71,11 @@ def create_pdf_from_uploaded(files, dpi=300):
                     y_offset += max_row_height + margin
                     max_row_height = 0
 
-                # 💡 한글 깨짐 우회: 확장자를 제외한 파일명에서 숫자/영어만 남기거나, 
-                # 변환 오류가 없도록 안정적인 문자열로 전처리하여 인쇄 레이어로 보냅니다.
-                raw_filename = os.path.splitext(file.name)[0]
-                filename_only = "".join([c for c in raw_filename if ord(c) < 128 or '가' <= c <= '힣'])
-                if not filename_only:
-                    filename_only = "Image_File"
-
+                # 순수 파일 이름 획득
+                filename_only = os.path.splitext(file.name)[0]
                 draw = ImageDraw.Draw(current_canvas)
                 
+                # 정밀 글자 박스 패딩 높이 계산
                 left, top, right, bottom = draw.textbbox((0, 0), filename_only, font=korean_font)
                 actual_text_height = bottom - top
 
@@ -92,7 +88,7 @@ def create_pdf_from_uploaded(files, dpi=300):
 
                 current_canvas.paste(img_resized, (x_offset, y_offset))
                 
-                # 정제된 텍스트 데이터 안전 인쇄 실행
+                # 🖊️ 로드된 오리지널 나눔고딕 정품 서체로 파일명 인쇄 실행
                 draw.text((x_offset, y_offset + target_h + text_margin_to_image), filename_only, fill=(40, 40, 40), font=korean_font)
 
                 x_offset += target_w + margin
@@ -108,7 +104,7 @@ def create_pdf_from_uploaded(files, dpi=300):
     pages.append(current_canvas)
     
     pdf_buffer = io.BytesIO()
-    # ✨ [치명적 오타 완벽 해결] pages 리스트의 0번째 첫 도화지 객체에서 직접 저장을 호출하도록 수정 완료!
+    # 0번째 인덱스 이미지 객체에서 정상 호출
     pages[0].save(pdf_buffer, "PDF", resolution=dpi, quality=85, save_all=True, append_images=pages[1:])
     pdf_buffer.seek(0)
     
@@ -121,7 +117,7 @@ def create_pdf_from_uploaded(files, dpi=300):
 if uploaded_files:
     st.success(f"총 {len(uploaded_files)}개의 파일이 선택되었습니다.")
     
-    with st.spinner("이미지 구조를 분석하여 고품질 PDF를 생성 중입니다..."):
+    with st.spinner("저장소 내의 나눔폰트를 결합하여 고품질 PDF를 생성 중입니다..."):
         pdf_data = create_pdf_from_uploaded(uploaded_files)
         
     st.download_button(
