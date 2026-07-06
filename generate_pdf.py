@@ -8,6 +8,9 @@ import io
 import streamlit as st
 from reportlab.pdfgen import canvas
 from reportlab.lib.utils import ImageReader
+# ✨ 한글 폰트 등록을 위한 reportlab 모듈 추가
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 from PIL import Image, ImageDraw, ImageFont
 
 # 1. 페이지 기본 설정 및 레이아웃
@@ -34,6 +37,26 @@ uploaded_files = st.file_uploader(
 
 def natural_sort_key(file_obj):
     return [int(text) if text.isdigit() else text.lower() for text in re.split(r'(\d+)', file_obj.name)]
+
+# ✨ 시스템에서 사용 가능한 한글 폰트를 찾아 reportlab에 등록하는 함수
+def register_reportlab_hangul_font():
+    font_paths = [
+        "NanumGothic.ttf",                     # 현재 폴더 내부
+        "C:/Windows/Fonts/malgun.ttf",         # 윈도우 맑은고딕
+        "/System/Library/Fonts/Supplemental/AppleGothic.ttf", # 맥 애플고딕
+        "/usr/share/fonts/truetype/nanum/NanumGothic.ttf"   # 리눅스/배포환경 나눔고딕
+    ]
+    
+    for path in font_paths:
+        if os.path.exists(path):
+            try:
+                pdfmetrics.registerFont(TTFont("HangulFont", path))
+                return "HangulFont"
+            except:
+                pass
+                
+    # 만약 위 폰트가 모두 없다면 표준 Helvetica로 대체 (한글은 깨질 수 있음)
+    return "Helvetica"
 
 # --- 내부 처리 함수 ---
 def build_outputs(files, size_mode, out_format):
@@ -65,6 +88,9 @@ def build_outputs(files, size_mode, out_format):
         pdf_buffer = io.BytesIO()
         pdf_canvas = canvas.Canvas(pdf_buffer, pagesize=(canvas_w, canvas_h))
         
+        # 안전하게 한글 폰트 로드 및 이름 가져오기
+        available_font = register_reportlab_hangul_font()
+        
         x_offset, y_offset = margin, canvas_h - margin
         max_row_height = 0
         
@@ -90,7 +116,8 @@ def build_outputs(files, size_mode, out_format):
             text_y = y_offset - text_padding - font_size
             image_y = text_y - text_padding - target_h
             
-            pdf_canvas.setFont("Helvetica", font_size)
+            # 📌 수정 포인트: 깨지는 기본 폰트 대신 등록된 한글 폰트를 사용합니다.
+            pdf_canvas.setFont(available_font, font_size)
             pdf_canvas.setFillColorRGB(0.15, 0.15, 0.15)
             pdf_canvas.drawString(x_offset, text_y, filename_only)
             
