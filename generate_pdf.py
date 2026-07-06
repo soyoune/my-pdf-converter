@@ -64,8 +64,8 @@ def build_outputs(files, size_mode, out_format):
     
     if "A4" in size_mode:
         canvas_w, canvas_h = 21.0 * scale, 29.7 * scale
-        target_w = 4.5 * scale
-        margin = 0.6 * scale
+        target_w = 6.0 * scale
+        margin = 0.8 * scale
         font_size = 8  
         text_padding = 4
     elif "A3" in size_mode:
@@ -76,8 +76,8 @@ def build_outputs(files, size_mode, out_format):
         text_padding = 6
     else:
         canvas_w, canvas_h = 55.0 * scale, 100.0 * scale
-        target_w = 11.0 * scale
-        margin = 1.5 * scale
+        target_w = 6.0 * scale
+        margin = 0.8 * scale
         font_size = 18
         text_padding = 10
 
