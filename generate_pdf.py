@@ -16,7 +16,7 @@ st.set_page_config(page_title="이미지 -> PDF 변환기 (멀티 사이즈)", l
 st.title("📄 이미지 다중 규격 PDF 변환 프로그램")
 st.write("원하는 이미지 파일과 출력 사이즈를 선택하면 고품질 PDF 파일로 결합해 드립니다.")
 
-# 🛠️ 출력 사이즈 선택 UI 추가
+# 🛠️ 출력 사이즈 선택 UI
 size_option = st.selectbox(
     "출력하실 PDF 용지 크기를 선택하세요:",
     ["A3 (29.7cm x 42.0cm)", "A4 (21.0cm x 29.7cm)", "사용자 정의 (55.0cm x 100.0cm)"]
@@ -39,23 +39,24 @@ def load_local_nanum_font(font_size):
             return ImageFont.truetype(font_path, font_size)
         except Exception:
             pass
-    return ImageFont.load_default(size=font_size)
+    # 폰트 로드 실패 시 시스템 기본 폰트로 안전하게 대체
+    return ImageFont.load_default()
 
 def create_pdf_from_uploaded(files, size_mode, dpi=300):
     cm_to_pixel = dpi / 2.54
     
-    # 선택한 모드에 따라 도화지(Canvas) 크기 세팅
+    # 선택한 모드에 따라 도화지(Canvas) 크기 및 이미지 크기 비율 세팅
     if "A3" in size_mode:
         width_cm, height_cm = 29.7, 42.0
-        target_w = int(6.0 * cm_to_pixel)       # 한 행에 배치될 이미지 기본 가로 크기
-        margin = int(0.8 * cm_to_pixel)         # 여백
+        target_w = int(6.0 * cm_to_pixel)       
+        margin = int(0.8 * cm_to_pixel)         
     elif "A4" in size_mode:
         width_cm, height_cm = 21.0, 29.7
-        target_w = int(4.5 * cm_to_pixel)       # A4에 맞게 이미지 크기 축소 축소
+        target_w = int(4.5 * cm_to_pixel)       
         margin = int(0.6 * cm_to_pixel)
     else:  # 550mm x 1m (55cm x 100cm)
         width_cm, height_cm = 55.0, 100.0
-        target_w = int(11.0 * cm_to_pixel)      # 대형 사이즈에 맞춰 가로 크기 확대
+        target_w = int(11.0 * cm_to_pixel)      
         margin = int(1.5 * cm_to_pixel)
         
     canvas_w, canvas_h = int(width_cm * cm_to_pixel), int(height_cm * cm_to_pixel)
@@ -83,6 +84,7 @@ def create_pdf_from_uploaded(files, size_mode, dpi=300):
                 img_resized = img.resize((target_w, target_h), Image.Resampling.BILINEAR)
                 img_resized = ImageEnhance.Sharpness(img_resized).enhance(1.2)
                 
+                # 행 바꿈 검사 (우측 여백 초과 시)
                 if x_offset + target_w + margin > canvas_w:
                     x_offset = margin
                     y_offset += max_row_height + margin
@@ -91,10 +93,16 @@ def create_pdf_from_uploaded(files, size_mode, dpi=300):
                 filename_only = os.path.splitext(file.name)[0]
                 draw = ImageDraw.Draw(current_canvas)
                 
-                left, top, right, bottom = draw.textbbox((0, 0), filename_only, font=korean_font)
-                actual_text_height = bottom - top
+                # 글자 높이 계산 (기본 폰트 예외 대처 포함)
+                try:
+                    left, top, right, bottom = draw.textbbox((0, 0), filename_only, font=korean_font)
+                    actual_text_height = bottom - top
+                except Exception:
+                    actual_text_height = font_size
+                    
                 current_block_height = target_h + text_margin_to_image + actual_text_height
                 
+                # 다음 페이지로 넘어가는지 검사 (하단 여백 초과 시)
                 if y_offset + current_block_height + margin > canvas_h:
                     pages.append(current_canvas)
                     current_canvas = Image.new("RGB", (canvas_w, canvas_h), "white")
@@ -102,7 +110,11 @@ def create_pdf_from_uploaded(files, size_mode, dpi=300):
                     max_row_height = 0
                     
                 current_canvas.paste(img_resized, (x_offset, y_offset))
-                draw.text((x_offset, y_offset + target_h + text_margin_to_image), filename_only, fill=(40, 40, 40), font=korean_font)
+                
+                try:
+                    draw.text((x_offset, y_offset + target_h + text_margin_to_image), filename_only, fill=(40, 40, 40), font=korean_font)
+                except Exception:
+                    draw.text((x_offset, y_offset + target_h + text_margin_to_image), filename_only, fill=(40, 40, 40))
                 
                 x_offset += target_w + margin
                 if current_block_height > max_row_height:
@@ -115,8 +127,9 @@ def create_pdf_from_uploaded(files, size_mode, dpi=300):
     pages.append(current_canvas)
     
     pdf_buffer = io.BytesIO()
-    pages[0].save(pdf_buffer, "PDF", resolution=dpi, quality=85, save_all=True, append_images=pages[1:])
-    pdf_buffer.seek(0)
+    if pages:
+        pages[0].save(pdf_buffer, "PDF", resolution=dpi, quality=85, save_all=True, append_images=pages[1:])
+        pdf_buffer.seek(0)
     
     for page in pages:
         page.close()
@@ -127,16 +140,18 @@ def create_pdf_from_uploaded(files, size_mode, dpi=300):
 if uploaded_files:
     st.success(f"총 {len(uploaded_files)}개의 파일이 선택되었습니다.")
     with st.spinner("선택하신 크기에 맞춰 고품질 PDF를 생성 중입니다..."):
-        pdf_data = create_pdf_from_uploaded(uploaded_files, size_option)
-        
-        # 파일명에 선택한 사이즈가 직관적으로 들어가도록 설정
-        short_size_name = "A3" if "A3" in size_option else "A4" if "A4" in size_option else "550x1000"
-        st.download_button(
-            label=f"📥 완성된 {short_size_name} PDF 다운로드받기", 
-            data=pdf_data, 
-            file_name=f"선택된_이미지_결합_{short_size_name}.pdf", 
-            mime="application/pdf"
-        )
+        try:
+            pdf_data = create_pdf_from_uploaded(uploaded_files, size_option)
+            
+            short_size_name = "A3" if "A3" in size_option else "A4" if "A4" in size_option else "550x1000"
+            st.download_button(
+                label=f"📥 완성된 {short_size_name} PDF 다운로드받기", 
+                data=pdf_data, 
+                file_name=f"선택된_이미지_결합_{short_size_name}.pdf", 
+                mime="application/pdf"
+            )
+        except Exception as e:
+            st.error(f"PDF 생성 중 오류가 발생했습니다: {e}")
 
 if __name__ == "__main__":
     if "streamlit" not in sys.argv:
