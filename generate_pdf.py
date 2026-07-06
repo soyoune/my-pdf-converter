@@ -12,11 +12,12 @@ except ImportError:
     subprocess.check_call([sys.executable, "-m", "pip", "install", "streamlit"])
     import streamlit as st
 
+# 1. 페이지 기본 설정 및 레이아웃
 st.set_page_config(page_title="이미지 -> PDF 변환기 (멀티 사이즈)", layout="centered")
 st.title("📄 이미지 다중 규격 PDF 변환 프로그램")
 st.write("원하는 이미지 파일과 출력 사이즈를 선택하면 고품질 PDF 파일로 결합해 드립니다.")
 
-# 🛠️ 출력 사이즈 선택 UI
+# 2. UI 구성 요소
 size_option = st.selectbox(
     "출력하실 PDF 용지 크기를 선택하세요:",
     ["A3 (29.7cm x 42.0cm)", "A4 (21.0cm x 29.7cm)", "사용자 정의 (55.0cm x 100.0cm)"]
@@ -31,7 +32,6 @@ uploaded_files = st.file_uploader(
 def natural_sort_key(file_obj):
     return [int(text) if text.isdigit() else text.lower() for text in re.split(r'(\d+)', file_obj.name)]
 
-# ⚠️ 안전한 폰트 로드 함수 (캐싱 제거 및 버전 호환성 확보)
 def load_local_nanum_font(font_size):
     font_path = "NanumGothic.ttf"
     if os.path.exists(font_path):
@@ -39,17 +39,15 @@ def load_local_nanum_font(font_size):
             return ImageFont.truetype(font_path, font_size)
         except Exception:
             pass
-    
-    # 구버전 Pillow 버전에서도 에러가 나지 않도록 기본 폰트 호출 방식 수정
     try:
         return ImageFont.load_default(size=font_size)
     except TypeError:
-        return ImageFont.load_default() # size 인자가 없는 구버전 대처
+        return ImageFont.load_default()
 
 def create_pdf_from_uploaded(files, size_mode, dpi=300):
     cm_to_pixel = dpi / 2.54
     
-    # 선택한 모드에 따라 도화지(Canvas) 크기 및 이미지 크기 비율 세팅
+    # 규격별 도화지 및 픽셀 값 설정
     if "A3" in size_mode:
         width_cm, height_cm = 29.7, 42.0
         target_w = int(6.0 * cm_to_pixel)       
@@ -137,6 +135,7 @@ def create_pdf_from_uploaded(files, size_mode, dpi=300):
     
     return pdf_buffer
 
+# 3. 메인 로직 실행부
 if uploaded_files:
     st.success(f"총 {len(uploaded_files)}개의 파일이 선택되었습니다.")
     with st.spinner("선택하신 크기에 맞춰 고품질 PDF를 생성 중입니다..."):
@@ -151,7 +150,3 @@ if uploaded_files:
             )
         except Exception as e:
             st.error(f"PDF 생성 중 오류가 발생했습니다: {e}")
-
-if __name__ == "__main__":
-    if "streamlit" not in sys.argv:
-        os.system(f'"{sys.executable}" -m streamlit run "{__file__}"')
