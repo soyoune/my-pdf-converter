@@ -106,6 +106,7 @@ def create_pdf_from_uploaded(files, size_mode, dpi=300):
                     current_canvas = Image.new("RGB", (canvas_w, canvas_h), "white")
                     x_offset, y_offset = margin, margin
                     max_row_height = 0
+                    draw = ImageDraw.Draw(current_canvas)  # 새 캔버스용 draw 객체 재생성
                     
                 current_canvas.paste(img_resized, (x_offset, y_offset))
                 
