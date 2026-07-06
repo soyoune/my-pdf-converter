@@ -48,24 +48,24 @@ def load_safe_font(font_size):
 def create_pdf_from_uploaded(files, size_mode, dpi=300):
     cm_to_pixel = dpi / 2.54
     
-    # ✨ 제안: 용지 규격별 '이미지 크기', '여백', '폰트 크기' 황금 비율 세팅
+    # 규격별 비율 세팅 (폰트 크기 및 상하 여백 밸런스 조정)
     if "A4" in size_mode:
         width_cm, height_cm = 21.0, 29.7
         target_w = int(4.5 * cm_to_pixel)       
         margin = int(0.6 * cm_to_pixel)
-        font_size = 24       # A4용 가독성 크기
-        text_padding = 15    # 글자와 이미지 사이 간격
+        font_size = 24       # 글자 크기
+        text_padding = 15    # 파일명 위/아래 여백 두께
     elif "A3" in size_mode:
         width_cm, height_cm = 29.7, 42.0
         target_w = int(6.0 * cm_to_pixel)       
         margin = int(0.8 * cm_to_pixel)
-        font_size = 36       # A3용 가독성 크기
+        font_size = 36       
         text_padding = 20    
     else:  # 550mm x 1m (55cm x 100cm)
         width_cm, height_cm = 55.0, 100.0
         target_w = int(11.0 * cm_to_pixel)      
         margin = int(1.5 * cm_to_pixel)
-        font_size = 64       # 대형 출력물용 시원한 크기
+        font_size = 64       
         text_padding = 35    
         
     canvas_w, canvas_h = int(width_cm * cm_to_pixel), int(height_cm * cm_to_pixel)
@@ -95,8 +95,8 @@ def create_pdf_from_uploaded(files, size_mode, dpi=300):
                     y_offset += max_row_height + margin
                     max_row_height = 0
                 
-                # ✨ 제안: 글자가 들어갈 총 높이(폰트크기 + 이미지높이 + 여백)를 계산하여 다음 페이지 전환 결정
-                total_block_height = target_h + font_size + text_padding
+                # 파일명 영역 공간과 이미지 공간을 합산하여 한 블록의 높이 계산
+                total_block_height = target_h + font_size + (text_padding * 2)
                 
                 if y_offset + total_block_height + margin > canvas_h:
                     pages.append(current_canvas)
@@ -104,18 +104,17 @@ def create_pdf_from_uploaded(files, size_mode, dpi=300):
                     x_offset, y_offset = margin, margin
                     max_row_height = 0
                 
-                # 텍스트가 들어갈 도화지 준비
                 draw = ImageDraw.Draw(current_canvas)
                 filename_only = os.path.splitext(file.name)[0]
                 
-                # ✨ 제안: 파일명을 이미지 '위쪽'에 자연스러운 여백을 두고 배치
+                # 📌 구조: [y_offset] -> (위쪽 여백) -> [파일명] -> (아래쪽 여백) -> [이미지]
                 text_y_position = y_offset + text_padding
-                image_y_position = text_y_position + font_size
+                image_y_position = text_y_position + font_size + text_padding
                 
-                # 파일명 먼저 쓰기
+                # 1. 파일명 그리기
                 draw.text((x_offset, text_y_position), filename_only, fill=(40, 40, 40), font=korean_font)
                 
-                # 파일명 아래에 이미지 배치
+                # 2. 파일명 아래 여백을 두고 이미지 배치
                 current_canvas.paste(img_resized, (x_offset, image_y_position))
                 
                 x_offset += target_w + margin
