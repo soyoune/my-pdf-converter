@@ -5,24 +5,10 @@ import gc
 import zipfile
 import io
 
-try:
-    import streamlit as st
-except ImportError:
-    import subprocess
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "streamlit"])
-    import streamlit as st
-
-# 일러스트 방식 투명 PDF를 위한 reportlab 라이브러리
-try:
-    from reportlab.pdfgen import canvas
-    from reportlab.lib.utils import ImageReader
-except ImportError:
-    import subprocess
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "reportlab"])
-    from reportlab.pdfgen import canvas
-    from reportlab.lib.utils import ImageReader
-
-from PIL import Image
+import streamlit as st
+from reportlab.pdfgen import canvas
+from reportlab.lib.utils import ImageReader
+from PIL import Image, ImageDraw, ImageFont
 
 # 1. 페이지 기본 설정 및 레이아웃
 st.set_page_config(page_title="완벽 투명 다중 변환기", layout="centered")
@@ -122,14 +108,12 @@ def build_outputs(files, size_mode, out_format):
 
     # 2) 사용자가 [투명 PNG 압축파일]을 선택한 경우
     else:
-        from PIL import ImageDraw, ImageFont
-        # Pillow 전용 픽셀 스케일 재생산
         dpi = 300
         px_scale = dpi / 2.54
         px_w, px_h = int((canvas_w/scale)*px_scale), int((canvas_h/scale)*px_scale)
         p_target_w = int((target_w/scale)*px_scale)
         p_margin = int((margin/scale)*px_scale)
-        p_font_size = int(font_size * 2.5) # 가독성을 위한 폰트 스케일 보정
+        p_font_size = int(font_size * 2.5) 
         p_padding = int(text_padding * 2.5)
         
         try:
