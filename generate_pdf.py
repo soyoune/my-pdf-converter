@@ -13,7 +13,7 @@ except ImportError:
     import streamlit as st
 
 # 1. 페이지 기본 설정 및 레이아웃
-st.set_page_config(page_title="이미지 -> PDF 변환기 (멀티 사이즈)", layout="centered")
+st.set_page_config(page_title="이미지 -> PDF 변환기", layout="centered")
 st.title("📄 이미지 다중 규격 PDF 변환 프로그램")
 st.write("원하는 이미지 파일과 출력 사이즈를 선택하면 고품질 PDF 파일로 결합해 드립니다.")
 
@@ -32,15 +32,16 @@ uploaded_files = st.file_uploader(
 def natural_sort_key(file_obj):
     return [int(text) if text.isdigit() else text.lower() for text in re.split(r'(\d+)', file_obj.name)]
 
-def load_local_nanum_font(font_size):
+def load_safe_font():
+    """버전 충돌 없는 안전한 10픽셀 폰트 로드"""
     font_path = "NanumGothic.ttf"
     if os.path.exists(font_path):
         try:
-            return ImageFont.truetype(font_path, font_size)
+            return ImageFont.truetype(font_path, 10)
         except Exception:
             pass
     try:
-        return ImageFont.load_default(size=font_size)
+        return ImageFont.load_default(size=10)
     except TypeError:
         return ImageFont.load_default()
 
@@ -54,23 +55,22 @@ def create_pdf_from_uploaded(files, size_mode, dpi=300):
         margin = int(0.8 * cm_to_pixel)         
     elif "A4" in size_mode:
         width_cm, height_cm = 21.0, 29.7
-        target_w = int(6.0 * cm_to_pixel)       
-        margin = int(0.8 * cm_to_pixel)   
-    else:  # 550mm x 1m (55cm x 100cm)
+        target_w = int(4.5 * cm_to_pixel)       
+        margin = int(0.6 * cm_to_pixel)
+    else:
         width_cm, height_cm = 55.0, 100.0
-        target_w = int(6.0 * cm_to_pixel)       
-        margin = int(0.8 * cm_to_pixel)   
+        target_w = int(11.0 * cm_to_pixel)      
+        margin = int(1.5 * cm_to_pixel)
         
     canvas_w, canvas_h = int(width_cm * cm_to_pixel), int(height_cm * cm_to_pixel)
-    text_margin_to_image = 20
     
     pages = []
     current_canvas = Image.new("RGB", (canvas_w, canvas_h), "white")
     x_offset, y_offset = margin, margin
     max_row_height = 0
     
-    font_size = int(dpi * (0.25 if "사용자" in size_mode else 0.16))
-    korean_font = load_local_nanum_font(font_size)
+    # 요청 사항: 폰트 사이즈 10 고정
+    korean_font = load_safe_font()
     
     sorted_files = sorted(files, key=natural_sort_key)
     
@@ -85,39 +85,32 @@ def create_pdf_from_uploaded(files, size_mode, dpi=300):
                 img_resized = img.resize((target_w, target_h), Image.Resampling.BILINEAR)
                 img_resized = ImageEnhance.Sharpness(img_resized).enhance(1.2)
                 
+                # 행 바꿈 계산
                 if x_offset + target_w + margin > canvas_w:
                     x_offset = margin
                     y_offset += max_row_height + margin
                     max_row_height = 0
                 
-                filename_only = os.path.splitext(file.name)[0]
-                draw = ImageDraw.Draw(current_canvas)
-                
-                try:
-                    left, top, right, bottom = draw.textbbox((0, 0), filename_only, font=korean_font)
-                    actual_text_height = bottom - top
-                except Exception:
-                    actual_text_height = font_size
-                    
-                current_block_height = target_h + text_margin_to_image + actual_text_height
-                
-                if y_offset + current_block_height + margin > canvas_h:
+                # 다음 페이지 계산 (텍스트 영역이 하단으로 빠지지 않으므로 오직 이미지 크기 기준)
+                if y_offset + target_h + margin > canvas_h:
                     pages.append(current_canvas)
                     current_canvas = Image.new("RGB", (canvas_w, canvas_h), "white")
                     x_offset, y_offset = margin, margin
                     max_row_height = 0
-                    draw = ImageDraw.Draw(current_canvas)  # 새 캔버스용 draw 객체 재생성
-                    
+                
+                # 이미지 배치
                 current_canvas.paste(img_resized, (x_offset, y_offset))
                 
-                try:
-                    draw.text((x_offset, y_offset + target_h + text_margin_to_image), filename_only, fill=(40, 40, 40), font=korean_font)
-                except Exception:
-                    draw.text((x_offset, y_offset + target_h + text_margin_to_image), filename_only, fill=(40, 40, 40))
+                # 글자 작성 (요청 사항: 이미지 하단이 아닌, 이미지 시작선 기준 10픽셀 위에 배치)
+                filename_only = os.path.splitext(file.name)[0]
+                draw = ImageDraw.Draw(current_canvas)
+                text_y_position = y_offset - 10 if y_offset - 10 > 0 else y_offset
+                
+                draw.text((x_offset, text_y_position), filename_only, fill=(40, 40, 40), font=korean_font)
                 
                 x_offset += target_w + margin
-                if current_block_height > max_row_height:
-                    max_row_height = current_block_height
+                if target_h > max_row_height:
+                    max_row_height = target_h
             del file_bytes
             gc.collect()
         except Exception as e:
