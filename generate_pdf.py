@@ -32,35 +32,41 @@ uploaded_files = st.file_uploader(
 def natural_sort_key(file_obj):
     return [int(text) if text.isdigit() else text.lower() for text in re.split(r'(\d+)', file_obj.name)]
 
-def load_safe_font():
-    """버전 충돌 없는 안전한 10픽셀 폰트 로드"""
+def load_safe_font(font_size):
+    """버전 충돌 없는 안전한 맞춤형 크기 폰트 로드"""
     font_path = "NanumGothic.ttf"
     if os.path.exists(font_path):
         try:
-            return ImageFont.truetype(font_path, 10)
+            return ImageFont.truetype(font_path, font_size)
         except Exception:
             pass
     try:
-        return ImageFont.load_default(size=10)
+        return ImageFont.load_default(size=font_size)
     except TypeError:
         return ImageFont.load_default()
 
 def create_pdf_from_uploaded(files, size_mode, dpi=300):
     cm_to_pixel = dpi / 2.54
     
-    # 규격별 도화지 및 픽셀 값 설정
-    if "A3" in size_mode:
-        width_cm, height_cm = 29.7, 42.0
-        target_w = int(6.0 * cm_to_pixel)       
-        margin = int(0.8 * cm_to_pixel)         
-    elif "A4" in size_mode:
+    # ✨ 제안: 용지 규격별 '이미지 크기', '여백', '폰트 크기' 황금 비율 세팅
+    if "A4" in size_mode:
         width_cm, height_cm = 21.0, 29.7
         target_w = int(4.5 * cm_to_pixel)       
         margin = int(0.6 * cm_to_pixel)
-    else:
+        font_size = 24       # A4용 가독성 크기
+        text_padding = 15    # 글자와 이미지 사이 간격
+    elif "A3" in size_mode:
+        width_cm, height_cm = 29.7, 42.0
+        target_w = int(6.0 * cm_to_pixel)       
+        margin = int(0.8 * cm_to_pixel)
+        font_size = 36       # A3용 가독성 크기
+        text_padding = 20    
+    else:  # 550mm x 1m (55cm x 100cm)
         width_cm, height_cm = 55.0, 100.0
         target_w = int(11.0 * cm_to_pixel)      
         margin = int(1.5 * cm_to_pixel)
+        font_size = 64       # 대형 출력물용 시원한 크기
+        text_padding = 35    
         
     canvas_w, canvas_h = int(width_cm * cm_to_pixel), int(height_cm * cm_to_pixel)
     
@@ -69,9 +75,7 @@ def create_pdf_from_uploaded(files, size_mode, dpi=300):
     x_offset, y_offset = margin, margin
     max_row_height = 0
     
-    # 요청 사항: 폰트 사이즈 10 고정
-    korean_font = load_safe_font()
-    
+    korean_font = load_safe_font(font_size)
     sorted_files = sorted(files, key=natural_sort_key)
     
     for file in sorted_files:
@@ -85,32 +89,38 @@ def create_pdf_from_uploaded(files, size_mode, dpi=300):
                 img_resized = img.resize((target_w, target_h), Image.Resampling.BILINEAR)
                 img_resized = ImageEnhance.Sharpness(img_resized).enhance(1.2)
                 
-                # 행 바꿈 계산
+                # 행 바꿈 계산 (우측 여백 초과 시)
                 if x_offset + target_w + margin > canvas_w:
                     x_offset = margin
                     y_offset += max_row_height + margin
                     max_row_height = 0
                 
-                # 다음 페이지 계산 (텍스트 영역이 하단으로 빠지지 않으므로 오직 이미지 크기 기준)
-                if y_offset + target_h + margin > canvas_h:
+                # ✨ 제안: 글자가 들어갈 총 높이(폰트크기 + 이미지높이 + 여백)를 계산하여 다음 페이지 전환 결정
+                total_block_height = target_h + font_size + text_padding
+                
+                if y_offset + total_block_height + margin > canvas_h:
                     pages.append(current_canvas)
                     current_canvas = Image.new("RGB", (canvas_w, canvas_h), "white")
                     x_offset, y_offset = margin, margin
                     max_row_height = 0
                 
-                # 이미지 배치
-                current_canvas.paste(img_resized, (x_offset, y_offset))
-                
-                # 글자 작성 (요청 사항: 이미지 하단이 아닌, 이미지 시작선 기준 10픽셀 위에 배치)
-                filename_only = os.path.splitext(file.name)[0]
+                # 텍스트가 들어갈 도화지 준비
                 draw = ImageDraw.Draw(current_canvas)
-                text_y_position = y_offset - 10 if y_offset - 10 > 0 else y_offset
+                filename_only = os.path.splitext(file.name)[0]
                 
+                # ✨ 제안: 파일명을 이미지 '위쪽'에 자연스러운 여백을 두고 배치
+                text_y_position = y_offset + text_padding
+                image_y_position = text_y_position + font_size
+                
+                # 파일명 먼저 쓰기
                 draw.text((x_offset, text_y_position), filename_only, fill=(40, 40, 40), font=korean_font)
                 
+                # 파일명 아래에 이미지 배치
+                current_canvas.paste(img_resized, (x_offset, image_y_position))
+                
                 x_offset += target_w + margin
-                if target_h > max_row_height:
-                    max_row_height = target_h
+                if total_block_height > max_row_height:
+                    max_row_height = total_block_height
             del file_bytes
             gc.collect()
         except Exception as e:
