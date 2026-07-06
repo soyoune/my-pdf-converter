@@ -2,6 +2,7 @@ import os
 import sys
 import re
 import gc
+import zipfile
 from PIL import Image, ImageEnhance, ImageDraw, ImageFont
 import io
 
@@ -12,13 +13,20 @@ except ImportError:
     subprocess.check_call([sys.executable, "-m", "pip", "install", "streamlit"])
     import streamlit as st
 
-st.set_page_config(page_title="이미지 -> PDF 변환기 (투명 유지)", layout="centered")
-st.title("📄 투명 PNG 대응 PDF 변환 프로그램")
-st.write("배경이 투명한 PNG의 투명도를 그대로 유지하여 고품질 PDF로 변환합니다.")
+# 1. 페이지 기본 설정 및 레이아웃
+st.set_page_config(page_title="이미지 -> 다중 포맷 변환기", layout="centered")
+st.title("📄 이미지 다중 규격 & 투명도 유지 변환 프로그램")
+st.write("원하는 규격을 선택한 후, PDF 결합본 또는 투명도가 100% 유지되는 PNG 압축파일로 다운로드하세요.")
 
+# 2. UI 구성 요소
 size_option = st.selectbox(
-    "출력하실 PDF 용지 크기를 선택하세요:",
+    "출력하실 용지 크기를 선택하세요:",
     ["A3 (29.7cm x 42.0cm)", "A4 (21.0cm x 29.7cm)", "사용자 정의 (55.0cm x 100.0cm)"]
+)
+
+download_format = st.radio(
+    "저장 방식을 선택하세요:",
+    ["인쇄용 PDF 결합본 (투명 영역이 흰색으로 채워짐)", "투명도 100% 유지 PNG 압축파일 (.zip)"]
 )
 
 uploaded_files = st.file_uploader(
@@ -42,7 +50,7 @@ def load_safe_font(font_size):
     except TypeError:
         return ImageFont.load_default()
 
-def create_pdf_from_uploaded(files, size_mode, dpi=300):
+def process_images(files, size_mode, out_format, dpi=300):
     cm_to_pixel = dpi / 2.54
     
     if "A4" in size_mode:
@@ -67,7 +75,7 @@ def create_pdf_from_uploaded(files, size_mode, dpi=300):
     canvas_w, canvas_h = int(width_cm * cm_to_pixel), int(height_cm * cm_to_pixel)
     
     pages = []
-    # ✨ 변경 포인트 1: 도화지 자체를 투명 채널이 존재하는 "RGBA" 모드로 생성합니다. (투명 바탕 스케치북)
+    # 📌 투명도를 온전히 담기 위해 투명(RGBA) 도화지로 시작합니다.
     current_canvas = Image.new("RGBA", (canvas_w, canvas_h), (255, 255, 255, 0))
     x_offset, y_offset = margin, margin
     max_row_height = 0
@@ -79,12 +87,10 @@ def create_pdf_from_uploaded(files, size_mode, dpi=300):
         try:
             file_bytes = file.read()
             with Image.open(io.BytesIO(file_bytes)) as img:
-                # ✨ 변경 포인트 2: 원본 PNG의 투명도(RGBA) 모드를 손실 없이 그대로 유지합니다.
                 img = img.convert("RGBA")
                 
                 orig_w, orig_h = img.size
                 target_h = int(target_w * (orig_h / orig_w))
-                
                 img_resized = img.resize((target_w, target_h), Image.Resampling.BILINEAR)
                 
                 if x_offset + target_w + margin > canvas_w:
@@ -106,10 +112,7 @@ def create_pdf_from_uploaded(files, size_mode, dpi=300):
                 text_y_position = y_offset + text_padding
                 image_y_position = text_y_position + font_size + text_padding
                 
-                # 파일명 쓰기
                 draw.text((x_offset, text_y_position), filename_only, fill=(40, 40, 40, 255), font=korean_font)
-                
-                # ✨ 변경 포인트 3: 투명도를 유지하며 도화지에 붙이기 위해 세 번째 인자에 자기 자신(img_resized)을 마스크로 지정합니다.
                 current_canvas.paste(img_resized, (x_offset, image_y_position), img_resized)
                 
                 x_offset += target_w + margin
@@ -122,31 +125,43 @@ def create_pdf_from_uploaded(files, size_mode, dpi=300):
             
     pages.append(current_canvas)
     
-    pdf_buffer = io.BytesIO()
-    if pages:
-        # ✨ 변경 포인트 4: PDF는 본질적으로 투명 레이어를 온전히 지원하지 못하므로, 
-        # 최종 빌드 시점에 투명도를 해석할 수 있는 포맷으로 온전히 변환하여 저장 큐에 태웁니다.
-        final_pages = [p.convert("RGB") if p.mode == "RGBA" else p for p in pages]
-        final_pages[0].save(pdf_buffer, "PDF", resolution=dpi, quality=100, save_all=True, append_images=final_pages[1:])
-        pdf_buffer.seek(0)
-    
-    for page in pages:
-        page.close()
-    gc.collect()
-    
-    return pdf_buffer
+    # 3. 사용자가 선택한 포맷에 따른 데이터 빌드 및 리턴
+    if "PDF" in out_format:
+        pdf_buffer = io.BytesIO()
+        if pages:
+            # PDF 저장을 위해 투명 배경을 순백색(RGB)으로 압축 변환
+            final_pages = [p.convert("RGB") if p.mode == "RGBA" else p for p in pages]
+            final_pages[0].save(pdf_buffer, "PDF", resolution=dpi, quality=100, save_all=True, append_images=final_pages[1:])
+            pdf_buffer.seek(0)
+        for page in pages:
+            page.close()
+        return pdf_buffer, "application/pdf", "pdf"
+    else:
+        # ✨ 핵심 추가: 투명 채널(RGBA)을 100% 유지한 채 PNG 파일들을 ZIP으로 압축
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+            for i, page in enumerate(pages):
+                page_img_buffer = io.BytesIO()
+                page.save(page_img_buffer, "PNG", resolution=dpi, quality=100)
+                page_img_buffer.seek(0)
+                zip_file.writestr(f"page_{i+1}.png", page_img_buffer.read())
+                page.close()
+        zip_buffer.seek(0)
+        return zip_buffer, "application/zip", "zip"
 
+# 4. 메인 로직 실행부
 if uploaded_files:
     st.success(f"총 {len(uploaded_files)}개의 파일이 선택되었습니다.")
-    with st.spinner("투명도를 유지하여 고품질 PDF를 생성 중입니다..."):
+    with st.spinner("요청하신 형식에 맞춰 고품질 파일을 생성 중입니다..."):
         try:
-            pdf_data = create_pdf_from_uploaded(uploaded_files, size_option)
+            output_data, mime_type, ext = process_images(uploaded_files, size_option, download_format)
             short_size_name = "A3" if "A3" in size_option else "A4" if "A4" in size_option else "550x1000"
+            
             st.download_button(
-                label=f"📥 완성된 {short_size_name} PDF 다운로드받기", 
-                data=pdf_data, 
-                file_name=f"투명포함_이미지_결합_{short_size_name}.pdf", 
-                mime="application/pdf"
+                label=f"📥 변환 완료 파일 다운로드 받기", 
+                data=output_data, 
+                file_name=f"변환완료_출력파일_{short_size_name}.{ext}", 
+                mime=mime_type
             )
         except Exception as e:
-            st.error(f"PDF 생성 중 오류가 발생했습니다: {e}")
+            st.error(f"파일 변환 중 오류가 발생했습니다: {e}")
