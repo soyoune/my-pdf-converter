@@ -59,13 +59,13 @@ def create_pdf_from_uploaded(files, size_mode, dpi=300):
         width_cm, height_cm = 29.7, 42.0
         target_w = int(6.0 * cm_to_pixel)       
         margin = int(0.8 * cm_to_pixel)
-        font_size = 36       
+        font_size = 24       
         text_padding = 20    
     else:  # 550mm x 1m (55cm x 100cm)
         width_cm, height_cm = 55.0, 100.0
         target_w = int(6.0 * cm_to_pixel)       
         margin = int(0.8 * cm_to_pixel)
-        font_size = 64       
+        font_size = 24       
         text_padding = 35    
         
     canvas_w, canvas_h = int(width_cm * cm_to_pixel), int(height_cm * cm_to_pixel)
