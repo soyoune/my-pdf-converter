@@ -54,7 +54,7 @@ def create_pdf_from_uploaded(files, size_mode, dpi=300):
         target_w = int(6.0 * cm_to_pixel)       
         margin = int(0.8 * cm_to_pixel)
         font_size = 24       # 글자 크기
-        text_padding = 15    # 파일명 위/아래 여백 두께
+        text_padding = 20    # 파일명 위/아래 여백 두께
     elif "A3" in size_mode:
         width_cm, height_cm = 29.7, 42.0
         target_w = int(6.0 * cm_to_pixel)       
@@ -65,7 +65,7 @@ def create_pdf_from_uploaded(files, size_mode, dpi=300):
         width_cm, height_cm = 55.0, 100.0
         target_w = int(6.0 * cm_to_pixel)       
         margin = int(0.8 * cm_to_pixel)
-        font_size = 24       
+        font_size = 36       
         text_padding = 35    
         
     canvas_w, canvas_h = int(width_cm * cm_to_pixel), int(height_cm * cm_to_pixel)
