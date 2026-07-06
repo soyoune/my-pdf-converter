@@ -51,8 +51,8 @@ def create_pdf_from_uploaded(files, size_mode, dpi=300):
     # 규격별 비율 세팅 (폰트 크기 및 상하 여백 밸런스 조정)
     if "A4" in size_mode:
         width_cm, height_cm = 21.0, 29.7
-        target_w = int(4.5 * cm_to_pixel)       
-        margin = int(0.6 * cm_to_pixel)
+        target_w = int(6.0 * cm_to_pixel)       
+        margin = int(0.8 * cm_to_pixel)
         font_size = 24       # 글자 크기
         text_padding = 15    # 파일명 위/아래 여백 두께
     elif "A3" in size_mode:
@@ -63,8 +63,8 @@ def create_pdf_from_uploaded(files, size_mode, dpi=300):
         text_padding = 20    
     else:  # 550mm x 1m (55cm x 100cm)
         width_cm, height_cm = 55.0, 100.0
-        target_w = int(11.0 * cm_to_pixel)      
-        margin = int(1.5 * cm_to_pixel)
+        target_w = int(6.0 * cm_to_pixel)       
+        margin = int(0.8 * cm_to_pixel)
         font_size = 64       
         text_padding = 35    
         
