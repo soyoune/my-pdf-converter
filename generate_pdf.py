@@ -54,12 +54,12 @@ def create_pdf_from_uploaded(files, size_mode, dpi=300):
         margin = int(0.8 * cm_to_pixel)         
     elif "A4" in size_mode:
         width_cm, height_cm = 21.0, 29.7
-        target_w = int(4.5 * cm_to_pixel)       
-        margin = int(0.6 * cm_to_pixel)
+        target_w = int(6.0 * cm_to_pixel)       
+        margin = int(0.8 * cm_to_pixel)   
     else:  # 550mm x 1m (55cm x 100cm)
         width_cm, height_cm = 55.0, 100.0
-        target_w = int(11.0 * cm_to_pixel)      
-        margin = int(1.5 * cm_to_pixel)
+        target_w = int(6.0 * cm_to_pixel)       
+        margin = int(0.8 * cm_to_pixel)   
         
     canvas_w, canvas_h = int(width_cm * cm_to_pixel), int(height_cm * cm_to_pixel)
     text_margin_to_image = 20
